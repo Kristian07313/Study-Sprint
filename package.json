@@ -1,0 +1,18 @@
+{
+  "name": "studysprint",
+  "version": "1.0.0",
+  "description": "A beginner-friendly full-stack study app with a simple homepage and backend API.",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js"
+  },
+  "keywords": [
+    "study",
+    "full-stack",
+    "node",
+    "beginner"
+  ],
+  "author": "",
+  "license": "MIT"
+}
