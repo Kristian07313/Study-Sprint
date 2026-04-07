@@ -7,6 +7,7 @@ StudySprint is a beginner-friendly full-stack web app with a small Node.js backe
 - A backend server built with Node.js
 - A static frontend homepage
 - A small API endpoint that returns a study tip
+- A PDF upload flow from the browser to the backend
 - A clean project structure that is easy to explore
 
 ## Folder structure
@@ -20,6 +21,8 @@ Study-Sprint/
 |   |-- index.html
 |   |-- styles.css
 |   `-- app.js
+|-- uploads/
+|   `-- .gitkeep
 `-- README.md
 ```
 
@@ -27,6 +30,7 @@ Study-Sprint/
 
 - `server/` contains the backend code. It starts the server, handles API routes, and serves the frontend files.
 - `public/` contains the frontend files that run in the browser.
+- `uploads/` stores uploaded PDF files.
 - `package.json` defines the project name and the commands used to start the app.
 
 ## Requirements
@@ -67,6 +71,8 @@ Starts the app in watch mode so it restarts when server files change.
 - Visiting `/` loads the homepage from the `public/` folder.
 - Clicking the button on the homepage sends a request to `/api/tip`.
 - The backend responds with a random study tip in JSON format.
+- Uploading a PDF sends the file to `/api/upload` using multipart form data.
+- The backend checks that the uploaded file is really a PDF before saving it.
 
 ## Beginner notes
 

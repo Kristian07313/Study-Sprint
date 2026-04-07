@@ -9,20 +9,66 @@
   <body>
     <main class="page">
       <section class="hero">
-        <p class="eyebrow">Study smarter</p>
-        <h1>Welcome to StudySprint</h1>
-        <p class="intro">
-          A beginner-friendly full-stack starter app for focused study sessions,
-          quick reminders, and simple backend-powered features.
-        </p>
+        <div class="hero-copy">
+          <p class="eyebrow">College study assistant</p>
+          <h1>StudySprint helps you turn class materials into focused study time.</h1>
+          <p class="intro">
+            Upload your notes, slides, or reading packets and get ready for
+            smarter review sessions. This starter app keeps the experience
+            simple, clean, and easy to build on.
+          </p>
 
-        <div class="actions">
-          <button id="tipButton" type="button">Get a study tip</button>
+          <div class="hero-stats">
+            <div class="stat">
+              <strong>Fast setup</strong>
+              <span>Simple full-stack starter for local development</span>
+            </div>
+            <div class="stat">
+              <strong>Student friendly</strong>
+              <span>Clean layout for study tips and future file tools</span>
+            </div>
+          </div>
         </div>
 
-        <div class="card">
-          <h2>Today&apos;s study tip</h2>
-          <p id="tipText">Press the button to load a tip from the backend.</p>
+        <div class="panel-group">
+          <section class="card upload-card" aria-labelledby="uploadTitle">
+            <p class="section-label">Upload area</p>
+            <h2 id="uploadTitle">Add study files</h2>
+            <p class="card-copy">
+              Upload a PDF like a syllabus, lecture slides, or a study guide to
+              store it in the app for future study features.
+            </p>
+
+            <form id="uploadForm" class="upload-form">
+              <label class="upload-box" for="studyFile">
+                <input id="studyFile" name="studyFile" type="file" accept=".pdf,application/pdf" />
+                <span class="upload-title">Choose a PDF</span>
+                <span class="upload-subtitle">
+                  Select one PDF file to upload to the backend
+                </span>
+              </label>
+
+              <p id="selectedFileName" class="file-name">No file selected yet.</p>
+
+              <div class="actions">
+                <button id="uploadButton" type="submit">Upload PDF</button>
+              </div>
+
+              <p id="uploadMessage" class="upload-message" aria-live="polite"></p>
+            </form>
+          </section>
+
+          <section class="card tip-card" aria-labelledby="tipTitle">
+            <p class="section-label">Quick motivation</p>
+            <h2 id="tipTitle">Today&apos;s study tip</h2>
+            <p id="tipText" class="card-copy">
+              Press the button to load a tip from the backend.
+            </p>
+
+            <div class="actions">
+              <button id="tipButton" type="button">Get a study tip</button>
+            </div>
+          </section>
         </div>
       </section>
     </main>

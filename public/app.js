@@ -1,5 +1,10 @@
 const tipButton = document.getElementById("tipButton");
 const tipText = document.getElementById("tipText");
+const uploadForm = document.getElementById("uploadForm");
+const studyFileInput = document.getElementById("studyFile");
+const uploadButton = document.getElementById("uploadButton");
+const uploadMessage = document.getElementById("uploadMessage");
+const selectedFileName = document.getElementById("selectedFileName");
 
 async function loadTip() {
   tipText.textContent = "Loading a fresh study tip...";
@@ -18,4 +23,65 @@ async function loadTip() {
   }
 }
 
+function showUploadMessage(message, type) {
+  uploadMessage.textContent = message;
+  uploadMessage.className = `upload-message ${type}`;
+}
+
+function updateSelectedFileName() {
+  const selectedFile = studyFileInput.files[0];
+
+  if (!selectedFile) {
+    selectedFileName.textContent = "No file selected yet.";
+    return;
+  }
+
+  selectedFileName.textContent = `Selected file: ${selectedFile.name}`;
+}
+
+async function uploadPdf(event) {
+  event.preventDefault();
+
+  const selectedFile = studyFileInput.files[0];
+
+  if (!selectedFile) {
+    showUploadMessage("Please choose a PDF file first.", "error");
+    return;
+  }
+
+  if (selectedFile.type !== "application/pdf" && !selectedFile.name.toLowerCase().endsWith(".pdf")) {
+    showUploadMessage("Only PDF files can be uploaded.", "error");
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append("studyFile", selectedFile);
+
+  uploadButton.disabled = true;
+  showUploadMessage("Uploading your PDF...", "");
+
+  try {
+    const response = await fetch("/api/upload", {
+      method: "POST",
+      body: formData
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || "Upload failed.");
+    }
+
+    selectedFileName.textContent = `Uploaded file: ${data.fileName}`;
+    showUploadMessage(data.message, "success");
+    uploadForm.reset();
+  } catch (error) {
+    showUploadMessage(error.message, "error");
+  } finally {
+    uploadButton.disabled = false;
+  }
+}
+
 tipButton.addEventListener("click", loadTip);
+studyFileInput.addEventListener("change", updateSelectedFileName);
+uploadForm.addEventListener("submit", uploadPdf);
