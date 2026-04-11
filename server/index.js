@@ -1,6 +1,7 @@
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
+const { PDFParse } = require("pdf-parse");
 
 const PORT = process.env.PORT || 3000;
 const PUBLIC_DIR = path.join(__dirname, "..", "public");
@@ -96,6 +97,20 @@ function parseMultipartFile(bodyBuffer, boundary) {
   return { error: "No file was received by the server." };
 }
 
+async function extractPdfText(fileBuffer) {
+  const parser = new PDFParse({ data: fileBuffer });
+
+  try {
+    const result = await parser.getText({ pageJoiner: "" });
+    return result.text
+      .replace(/\r/g, "")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+  } finally {
+    await parser.destroy();
+  }
+}
+
 function handlePdfUpload(request, response) {
   const contentType = request.headers["content-type"] || "";
   const boundaryMatch = contentType.match(/boundary=(?:"([^"]+)"|([^;]+))/i);
@@ -114,7 +129,7 @@ function handlePdfUpload(request, response) {
     chunks.push(chunk);
   });
 
-  request.on("end", () => {
+  request.on("end", async () => {
     try {
       const bodyBuffer = Buffer.concat(chunks);
       const parsedFile = parseMultipartFile(bodyBuffer, boundary);
@@ -131,6 +146,8 @@ function handlePdfUpload(request, response) {
         return;
       }
 
+      const extractedText = await extractPdfText(parsedFile.fileBuffer);
+
       ensureUploadsDirectory();
 
       const savedFileName = `${Date.now()}-${parsedFile.fileName}`;
@@ -143,13 +160,16 @@ function handlePdfUpload(request, response) {
         }
 
         sendJson(response, 200, {
-          message: "PDF uploaded successfully.",
-          fileName: parsedFile.fileName
+          message: extractedText
+            ? "PDF uploaded and text extracted successfully."
+            : "PDF uploaded successfully, but no readable text was found.",
+          fileName: parsedFile.fileName,
+          extractedText
         });
       });
     } catch (error) {
       sendJson(response, 500, {
-        error: "Something went wrong while processing the upload."
+        error: "Something went wrong while processing the PDF."
       });
     }
   });

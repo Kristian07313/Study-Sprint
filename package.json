@@ -14,5 +14,8 @@
     "beginner"
   ],
   "author": "",
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "pdf-parse": "^2.4.5"
+  }
 }

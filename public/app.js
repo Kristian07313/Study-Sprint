@@ -5,6 +5,7 @@ const studyFileInput = document.getElementById("studyFile");
 const uploadButton = document.getElementById("uploadButton");
 const uploadMessage = document.getElementById("uploadMessage");
 const selectedFileName = document.getElementById("selectedFileName");
+const extractedText = document.getElementById("extractedText");
 
 async function loadTip() {
   tipText.textContent = "Loading a fresh study tip...";
@@ -39,6 +40,10 @@ function updateSelectedFileName() {
   selectedFileName.textContent = `Selected file: ${selectedFile.name}`;
 }
 
+function showExtractedText(text) {
+  extractedText.textContent = text || "No readable text was found in this PDF.";
+}
+
 async function uploadPdf(event) {
   event.preventDefault();
 
@@ -59,6 +64,7 @@ async function uploadPdf(event) {
 
   uploadButton.disabled = true;
   showUploadMessage("Uploading your PDF...", "");
+  showExtractedText("Processing your PDF and extracting text...");
 
   try {
     const response = await fetch("/api/upload", {
@@ -74,9 +80,11 @@ async function uploadPdf(event) {
 
     selectedFileName.textContent = `Uploaded file: ${data.fileName}`;
     showUploadMessage(data.message, "success");
+    showExtractedText(data.extractedText);
     uploadForm.reset();
   } catch (error) {
     showUploadMessage(error.message, "error");
+    showExtractedText("Your extracted text will appear here after a successful upload.");
   } finally {
     uploadButton.disabled = false;
   }

@@ -8,6 +8,7 @@ StudySprint is a beginner-friendly full-stack web app with a small Node.js backe
 - A static frontend homepage
 - A small API endpoint that returns a study tip
 - A PDF upload flow from the browser to the backend
+- PDF text extraction after upload
 - A clean project structure that is easy to explore
 
 ## Folder structure
@@ -73,6 +74,7 @@ Starts the app in watch mode so it restarts when server files change.
 - The backend responds with a random study tip in JSON format.
 - Uploading a PDF sends the file to `/api/upload` using multipart form data.
 - The backend checks that the uploaded file is really a PDF before saving it.
+- After upload, the backend extracts readable text from the PDF and sends it back to the frontend.
 
 ## Beginner notes
 

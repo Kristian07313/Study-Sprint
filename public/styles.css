@@ -136,6 +136,10 @@ button:disabled {
   gap: 18px;
 }
 
+.extracted-text-card {
+  grid-column: 1 / -1;
+}
+
 .section-label {
   margin: 0 0 10px;
   color: var(--accent);
@@ -208,6 +212,20 @@ button:disabled {
 
 .upload-message.error {
   color: #b23b3b;
+}
+
+.extracted-text {
+  margin-top: 20px;
+  min-height: 220px;
+  max-height: 380px;
+  overflow: auto;
+  padding: 20px;
+  border-radius: 18px;
+  border: 1px solid var(--surface-border);
+  background: #ffffff;
+  color: var(--text);
+  white-space: pre-wrap;
+  line-height: 1.7;
 }
 
 @media (max-width: 900px) {
