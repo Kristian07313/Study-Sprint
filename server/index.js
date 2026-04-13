@@ -2,10 +2,14 @@ const http = require("http");
 const fs = require("fs");
 const path = require("path");
 const { PDFParse } = require("pdf-parse");
+const { promisify } = require("util");
 
 const PORT = process.env.PORT || 3000;
 const PUBLIC_DIR = path.join(__dirname, "..", "public");
 const UPLOADS_DIR = path.join(__dirname, "..", "uploads");
+const readFile = promisify(fs.readFile);
+const stat = promisify(fs.stat);
+const writeFile = promisify(fs.writeFile);
 
 const studyTips = [
   "Break big topics into 25-minute focus sessions.",
@@ -34,6 +38,14 @@ function sendJson(response, statusCode, data) {
   response.end(JSON.stringify(data));
 }
 
+function sendFile(response, filePath, fileContent) {
+  const extension = path.extname(filePath).toLowerCase();
+  response.writeHead(200, {
+    "Content-Type": contentTypes[extension] || "application/octet-stream"
+  });
+  response.end(fileContent);
+}
+
 function ensureUploadsDirectory() {
   if (!fs.existsSync(UPLOADS_DIR)) {
     fs.mkdirSync(UPLOADS_DIR, { recursive: true });
@@ -51,50 +63,85 @@ function isPdfFile(fileName, contentType, fileBuffer) {
   return hasPdfExtension && hasPdfMimeType && hasPdfHeader;
 }
 
+function getBoundaryFromContentType(contentType) {
+  const boundaryMatch = contentType.match(/boundary=(?:"([^"]+)"|([^;]+))/i);
+
+  if (!contentType.startsWith("multipart/form-data") || !boundaryMatch) {
+    return null;
+  }
+
+  return boundaryMatch[1] || boundaryMatch[2];
+}
+
+function readRequestBody(request) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+
+    request.on("data", (chunk) => {
+      chunks.push(chunk);
+    });
+
+    request.on("end", () => {
+      resolve(Buffer.concat(chunks));
+    });
+
+    request.on("error", () => {
+      reject(new Error("Something went wrong while receiving the upload."));
+    });
+  });
+}
+
+function getMultipartFilePart(parts) {
+  for (const part of parts) {
+    if (part.includes('name="studyFile"')) {
+      return part;
+    }
+  }
+
+  return null;
+}
+
 function parseMultipartFile(bodyBuffer, boundary) {
   const boundaryText = `--${boundary}`;
   const bodyText = bodyBuffer.toString("latin1");
   const parts = bodyText.split(boundaryText);
+  const filePart = getMultipartFilePart(parts);
 
-  for (const part of parts) {
-    if (!part.includes('name="studyFile"')) {
-      continue;
-    }
-
-    const headerEndIndex = part.indexOf("\r\n\r\n");
-
-    if (headerEndIndex === -1) {
-      continue;
-    }
-
-    const headerText = part.slice(0, headerEndIndex);
-    const fileNameMatch = headerText.match(/filename="([^"]+)"/i);
-    const contentTypeMatch = headerText.match(/Content-Type:\s*([^\r\n]+)/i);
-
-    if (!fileNameMatch) {
-      return { error: "Please choose a PDF file before uploading." };
-    }
-
-    const fileName = sanitizeFileName(fileNameMatch[1]);
-    const contentType = contentTypeMatch ? contentTypeMatch[1].trim() : "";
-    const fileContentStart = headerEndIndex + 4;
-    const fileContentEnd = part.lastIndexOf("\r\n");
-
-    if (fileContentEnd <= fileContentStart) {
-      return { error: "The uploaded file was empty." };
-    }
-
-    const fileText = part.slice(fileContentStart, fileContentEnd);
-    const fileBuffer = Buffer.from(fileText, "latin1");
-
-    return {
-      fileName,
-      contentType,
-      fileBuffer
-    };
+  if (!filePart) {
+    return { error: "No file was received by the server." };
   }
 
-  return { error: "No file was received by the server." };
+  const headerEndIndex = filePart.indexOf("\r\n\r\n");
+
+  if (headerEndIndex === -1) {
+    return { error: "No file was received by the server." };
+  }
+
+  const headerText = filePart.slice(0, headerEndIndex);
+  const fileNameMatch = headerText.match(/filename="([^"]+)"/i);
+  const contentTypeMatch = headerText.match(/Content-Type:\s*([^\r\n]+)/i);
+
+  if (!fileNameMatch) {
+    return { error: "Please choose a PDF file before uploading." };
+  }
+
+  const fileName = sanitizeFileName(fileNameMatch[1]);
+  const contentType = contentTypeMatch ? contentTypeMatch[1].trim() : "";
+  const fileContentStart = headerEndIndex + 4;
+  const fileContentEnd = filePart.lastIndexOf("\r\n");
+
+  if (fileContentEnd <= fileContentStart) {
+    return { error: "The uploaded file was empty." };
+  }
+
+  const fileText = filePart.slice(fileContentStart, fileContentEnd);
+  const fileBuffer = Buffer.from(fileText, "latin1");
+
+  return {
+    fileName,
+    contentType,
+    fileBuffer
+  };
 }
 
 async function extractPdfText(fileBuffer) {
@@ -111,99 +158,130 @@ async function extractPdfText(fileBuffer) {
   }
 }
 
-function handlePdfUpload(request, response) {
-  const contentType = request.headers["content-type"] || "";
-  const boundaryMatch = contentType.match(/boundary=(?:"([^"]+)"|([^;]+))/i);
-
-  if (!contentType.startsWith("multipart/form-data") || !boundaryMatch) {
-    sendJson(response, 400, {
-      error: "Please upload the PDF using a multipart form."
-    });
-    return;
+function validateUploadedPdf(file) {
+  if (!isPdfFile(file.fileName, file.contentType, file.fileBuffer)) {
+    return { error: "Only PDF files are allowed." };
   }
 
-  const boundary = boundaryMatch[1] || boundaryMatch[2];
-  const chunks = [];
-
-  request.on("data", (chunk) => {
-    chunks.push(chunk);
-  });
-
-  request.on("end", async () => {
-    try {
-      const bodyBuffer = Buffer.concat(chunks);
-      const parsedFile = parseMultipartFile(bodyBuffer, boundary);
-
-      if (parsedFile.error) {
-        sendJson(response, 400, { error: parsedFile.error });
-        return;
-      }
-
-      if (!isPdfFile(parsedFile.fileName, parsedFile.contentType, parsedFile.fileBuffer)) {
-        sendJson(response, 400, {
-          error: "Only PDF files are allowed."
-        });
-        return;
-      }
-
-      const extractedText = await extractPdfText(parsedFile.fileBuffer);
-
-      ensureUploadsDirectory();
-
-      const savedFileName = `${Date.now()}-${parsedFile.fileName}`;
-      const savePath = path.join(UPLOADS_DIR, savedFileName);
-
-      fs.writeFile(savePath, parsedFile.fileBuffer, (error) => {
-        if (error) {
-          sendJson(response, 500, { error: "Unable to save the uploaded PDF." });
-          return;
-        }
-
-        sendJson(response, 200, {
-          message: extractedText
-            ? "PDF uploaded and text extracted successfully."
-            : "PDF uploaded successfully, but no readable text was found.",
-          fileName: parsedFile.fileName,
-          extractedText
-        });
-      });
-    } catch (error) {
-      sendJson(response, 500, {
-        error: "Something went wrong while processing the PDF."
-      });
-    }
-  });
-
-  request.on("error", () => {
-    sendJson(response, 500, {
-      error: "Something went wrong while receiving the upload."
-    });
-  });
+  return { file };
 }
 
-function serveFile(filePath, response) {
-  fs.readFile(filePath, (error, content) => {
-    if (error) {
-      sendJson(response, 500, { error: "Unable to load file." });
-      return;
-    }
-
-    const extension = path.extname(filePath).toLowerCase();
-    response.writeHead(200, {
-      "Content-Type": contentTypes[extension] || "application/octet-stream"
-    });
-    response.end(content);
-  });
+function buildUploadResponse(fileName, extractedText) {
+  return {
+    message: extractedText
+      ? "PDF uploaded and text extracted successfully."
+      : "PDF uploaded successfully, but no readable text was found.",
+    fileName,
+    extractedText
+  };
 }
 
-function getSafeFilePath(requestPath) {
-  const normalizedPath = path.normalize(requestPath).replace(/^(\.\.[/\\])+/, "");
+async function saveUploadedPdf(file) {
+  ensureUploadsDirectory();
+
+  const savedFileName = `${Date.now()}-${file.fileName}`;
+  const savePath = path.join(UPLOADS_DIR, savedFileName);
+
+  await writeFile(savePath, file.fileBuffer);
+}
+
+async function processUploadedPdf(request) {
+  const contentType = request.headers["content-type"] || "";
+  const boundary = getBoundaryFromContentType(contentType);
+
+  if (!boundary) {
+    return {
+      statusCode: 400,
+      data: { error: "Please upload the PDF using a multipart form." }
+    };
+  }
+
+  const bodyBuffer = await readRequestBody(request);
+  const parsedFile = parseMultipartFile(bodyBuffer, boundary);
+
+  if (parsedFile.error) {
+    return {
+      statusCode: 400,
+      data: { error: parsedFile.error }
+    };
+  }
+
+  const validationResult = validateUploadedPdf(parsedFile);
+
+  if (validationResult.error) {
+    return {
+      statusCode: 400,
+      data: { error: validationResult.error }
+    };
+  }
+
+  const extractedText = await extractPdfText(parsedFile.fileBuffer);
+  await saveUploadedPdf(parsedFile);
+
+  return {
+    statusCode: 200,
+    data: buildUploadResponse(parsedFile.fileName, extractedText)
+  };
+}
+
+function getRandomStudyTip() {
+  return studyTips[Math.floor(Math.random() * studyTips.length)];
+}
+
+function getRequestUrl(request) {
+  return new URL(request.url, `http://${request.headers.host}`);
+}
+
+function getSafePublicFilePath(requestPath) {
+  const requestedPath = requestPath === "/" ? "/index.html" : requestPath;
+  const normalizedPath = path.normalize(requestedPath).replace(/^(\.\.[/\\])+/, "");
   const safePath = normalizedPath === path.sep ? "index.html" : normalizedPath;
   return path.join(PUBLIC_DIR, safePath);
 }
 
-const server = http.createServer((request, response) => {
-  const requestUrl = new URL(request.url, `http://${request.headers.host}`);
+async function serveStaticFile(requestPath, response) {
+  const filePath = getSafePublicFilePath(requestPath);
+
+  if (!filePath.startsWith(PUBLIC_DIR)) {
+    sendJson(response, 403, { error: "Access denied." });
+    return;
+  }
+
+  try {
+    const fileStats = await stat(filePath);
+
+    if (!fileStats.isFile()) {
+      sendJson(response, 404, { error: "Page not found." });
+      return;
+    }
+
+    const fileContent = await readFile(filePath);
+    sendFile(response, filePath, fileContent);
+  } catch (error) {
+    if (error.code === "ENOENT") {
+      sendJson(response, 404, { error: "Page not found." });
+      return;
+    }
+
+    sendJson(response, 500, { error: "Unable to load file." });
+  }
+}
+
+async function handlePdfUpload(request, response) {
+  try {
+    const result = await processUploadedPdf(request);
+    sendJson(response, result.statusCode, result.data);
+  } catch (error) {
+    const message = error.message === "Something went wrong while receiving the upload."
+      ? error.message
+      : "Something went wrong while processing the PDF.";
+
+    sendJson(response, 500, { error: message });
+  }
+}
+
+async function handleRequest(request, response) {
+  const requestUrl = getRequestUrl(request);
 
   if (requestUrl.pathname === "/api/health") {
     sendJson(response, 200, { status: "ok", app: "StudySprint" });
@@ -211,32 +289,21 @@ const server = http.createServer((request, response) => {
   }
 
   if (requestUrl.pathname === "/api/tip") {
-    const randomTip = studyTips[Math.floor(Math.random() * studyTips.length)];
-    sendJson(response, 200, { tip: randomTip });
+    sendJson(response, 200, { tip: getRandomStudyTip() });
     return;
   }
 
   if (request.method === "POST" && requestUrl.pathname === "/api/upload") {
-    handlePdfUpload(request, response);
+    await handlePdfUpload(request, response);
     return;
   }
 
-  const requestedPath = requestUrl.pathname === "/" ? "/index.html" : requestUrl.pathname;
-  const filePath = getSafeFilePath(requestedPath);
+  await serveStaticFile(requestUrl.pathname, response);
+}
 
-  if (!filePath.startsWith(PUBLIC_DIR)) {
-    sendJson(response, 403, { error: "Access denied." });
-    return;
-  }
-
-  fs.stat(filePath, (error, stats) => {
-    if (error || !stats.isFile()) {
-      sendJson(response, 404, { error: "Page not found." });
-      return;
-    }
-
-    serveFile(filePath, response);
-  });
+const server = http.createServer((request, response) => {
+  // Route handling stays tiny here so the upload flow is easier to follow.
+  handleRequest(request, response);
 });
 
 server.listen(PORT, () => {
