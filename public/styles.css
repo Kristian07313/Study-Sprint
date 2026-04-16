@@ -140,6 +140,10 @@ button:disabled {
   grid-column: 1 / -1;
 }
 
+.flashcards-card {
+  grid-column: 1 / -1;
+}
+
 .section-label {
   margin: 0 0 10px;
   color: var(--accent);
@@ -226,6 +230,50 @@ button:disabled {
   color: var(--text);
   white-space: pre-wrap;
   line-height: 1.7;
+}
+
+.flashcards-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.flashcards-empty {
+  margin: 0;
+  padding: 20px;
+  border-radius: 18px;
+  border: 1px dashed var(--surface-border);
+  background: #ffffff;
+  color: var(--muted);
+}
+
+.flashcard {
+  padding: 20px;
+  border-radius: 18px;
+  border: 1px solid var(--surface-border);
+  background: #ffffff;
+}
+
+.flashcard-label {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--accent);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.flashcard-question,
+.flashcard-answer {
+  margin: 0;
+  line-height: 1.6;
+}
+
+.flashcard-answer {
+  margin-top: 14px;
+  color: var(--muted);
 }
 
 @media (max-width: 900px) {

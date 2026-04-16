@@ -18,6 +18,11 @@ const studyTips = [
   "Use short quizzes to check what you actually remember.",
   "Study one difficult topic first while your energy is high."
 ];
+const flashcardStopWords = new Set([
+  "a", "an", "and", "are", "as", "at", "be", "by", "for", "from", "has", "in",
+  "is", "it", "of", "on", "or", "that", "the", "their", "this", "to", "was",
+  "were", "with", "you", "your"
+]);
 
 const contentTypes = {
   ".html": "text/html; charset=utf-8",
@@ -158,6 +163,104 @@ async function extractPdfText(fileBuffer) {
   }
 }
 
+function splitTextIntoStudyLines(text) {
+  return text
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 20);
+}
+
+function getKeywordCandidates(text) {
+  const matches = text.toLowerCase().match(/[a-z]{4,}/g) || [];
+  const uniqueWords = [];
+
+  for (const word of matches) {
+    if (!flashcardStopWords.has(word) && !uniqueWords.includes(word)) {
+      uniqueWords.push(word);
+    }
+  }
+
+  return uniqueWords;
+}
+
+function capitalizeWord(word) {
+  return word.charAt(0).toUpperCase() + word.slice(1);
+}
+
+function buildKeywordFlashcard(line, keyword) {
+  const hiddenWordPattern = new RegExp(`\\b${keyword}\\b`, "i");
+  const prompt = line.replace(hiddenWordPattern, "_____");
+
+  if (prompt === line) {
+    return null;
+  }
+
+  return {
+    question: `Fill in the missing term: ${prompt}`,
+    answer: capitalizeWord(keyword)
+  };
+}
+
+function buildSummaryFlashcard(line, index) {
+  return {
+    question: `What is a key idea from study note ${index + 1}?`,
+    answer: line
+  };
+}
+
+function generateFlashcardsFromText(text) {
+  const lines = splitTextIntoStudyLines(text);
+  const flashcards = [];
+  const usedQuestions = new Set();
+
+  for (const line of lines) {
+    const keywords = getKeywordCandidates(line).slice(0, 2);
+
+    for (const keyword of keywords) {
+      const flashcard = buildKeywordFlashcard(line, keyword);
+
+      if (flashcard && !usedQuestions.has(flashcard.question)) {
+        flashcards.push(flashcard);
+        usedQuestions.add(flashcard.question);
+      }
+
+      if (flashcards.length === 10) {
+        return flashcards;
+      }
+    }
+  }
+
+  for (const [index, line] of lines.entries()) {
+    const flashcard = buildSummaryFlashcard(line, index);
+
+    if (!usedQuestions.has(flashcard.question)) {
+      flashcards.push(flashcard);
+      usedQuestions.add(flashcard.question);
+    }
+
+    if (flashcards.length === 10) {
+      return flashcards;
+    }
+  }
+
+  // If the PDF text is short, repeat the strongest lines in a predictable way
+  // so the UI still receives 5 study cards to work with.
+  let fallbackIndex = 0;
+
+  while (flashcards.length < 5 && lines.length > 0) {
+    const line = lines[fallbackIndex % lines.length];
+    const flashcard = {
+      question: `Which study point should you remember from section ${fallbackIndex + 1}?`,
+      answer: line
+    };
+
+    flashcards.push(flashcard);
+    fallbackIndex += 1;
+  }
+
+  return flashcards;
+}
+
 function validateUploadedPdf(file) {
   if (!isPdfFile(file.fileName, file.contentType, file.fileBuffer)) {
     return { error: "Only PDF files are allowed." };
@@ -166,13 +269,14 @@ function validateUploadedPdf(file) {
   return { file };
 }
 
-function buildUploadResponse(fileName, extractedText) {
+function buildUploadResponse(fileName, extractedText, flashcards) {
   return {
     message: extractedText
       ? "PDF uploaded and text extracted successfully."
       : "PDF uploaded successfully, but no readable text was found.",
     fileName,
-    extractedText
+    extractedText,
+    flashcards
   };
 }
 
@@ -216,11 +320,12 @@ async function processUploadedPdf(request) {
   }
 
   const extractedText = await extractPdfText(parsedFile.fileBuffer);
+  const flashcards = extractedText ? generateFlashcardsFromText(extractedText) : [];
   await saveUploadedPdf(parsedFile);
 
   return {
     statusCode: 200,
-    data: buildUploadResponse(parsedFile.fileName, extractedText)
+    data: buildUploadResponse(parsedFile.fileName, extractedText, flashcards)
   };
 }
 

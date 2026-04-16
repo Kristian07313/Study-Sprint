@@ -6,7 +6,8 @@ const elements = {
   uploadButton: document.getElementById("uploadButton"),
   uploadMessage: document.getElementById("uploadMessage"),
   selectedFileName: document.getElementById("selectedFileName"),
-  extractedText: document.getElementById("extractedText")
+  extractedText: document.getElementById("extractedText"),
+  flashcards: document.getElementById("flashcards")
 };
 
 function getSelectedFile() {
@@ -54,6 +55,44 @@ function showExtractedText(text) {
   elements.extractedText.textContent = text || "No readable text was found in this PDF.";
 }
 
+function createFlashcardElement(flashcard, index) {
+  const card = document.createElement("article");
+  card.className = "flashcard";
+
+  const label = document.createElement("span");
+  label.className = "flashcard-label";
+  label.textContent = `Flashcard ${index + 1}`;
+
+  const question = document.createElement("p");
+  question.className = "flashcard-question";
+  question.innerHTML = "<strong>Question:</strong> ";
+  question.append(document.createTextNode(flashcard.question));
+
+  const answer = document.createElement("p");
+  answer.className = "flashcard-answer";
+  answer.innerHTML = "<strong>Answer:</strong> ";
+  answer.append(document.createTextNode(flashcard.answer));
+
+  card.append(label, question, answer);
+  return card;
+}
+
+function showFlashcards(flashcards, emptyMessage = "No flashcards could be created from this PDF yet.") {
+  elements.flashcards.innerHTML = "";
+
+  if (!flashcards || flashcards.length === 0) {
+    const emptyState = document.createElement("p");
+    emptyState.className = "flashcards-empty";
+    emptyState.textContent = emptyMessage;
+    elements.flashcards.append(emptyState);
+    return;
+  }
+
+  flashcards.forEach((flashcard, index) => {
+    elements.flashcards.append(createFlashcardElement(flashcard, index));
+  });
+}
+
 function resetUploadForm() {
   elements.uploadForm.reset();
 }
@@ -84,6 +123,7 @@ async function uploadPdf(event) {
   setButtonLoadingState(true);
   showUploadMessage("Uploading your PDF...", "");
   showExtractedText("Processing your PDF and extracting text...");
+  showFlashcards([], "Generating flashcards from your PDF...");
 
   try {
     const response = await fetch("/api/upload", {
@@ -100,10 +140,12 @@ async function uploadPdf(event) {
     elements.selectedFileName.textContent = `Uploaded file: ${data.fileName}`;
     showUploadMessage(data.message, "success");
     showExtractedText(data.extractedText);
+    showFlashcards(data.flashcards);
     resetUploadForm();
   } catch (error) {
     showUploadMessage(error.message, "error");
     showExtractedText("Your extracted text will appear here after a successful upload.");
+    showFlashcards([], "Your flashcards will appear here after a successful PDF upload.");
   } finally {
     setButtonLoadingState(false);
   }
